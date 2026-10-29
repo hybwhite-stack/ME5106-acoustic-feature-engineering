@@ -173,9 +173,6 @@ def main() -> None:
                 "留出预测速度_mm_s": int(speed_loo[i]),
                 "正确": int(speed_loo[i] == speed[i]),
             })
-        # The final exploratory speed fit includes Sample 49's known label.
-        speed_final = speed_model().fit(speed_x, speed)
-        assert speed_final.classes_.tolist() == [550, 700, 850]
         pred49_held_out = int(speed_loo[np.where(speed_group_ids == 49)[0][0]])
         class_correct = {value: int(np.sum((speed == value) & (speed_loo == value)))
                          for value in (550, 700, 850)}
@@ -195,11 +192,28 @@ def main() -> None:
             "49留一预测速度_mm_s": pred49_held_out,
             "49留一是否正确": int(pred49_held_out == 850),
         })
-    predictions = [
-        {"SampleID": sid, "所用特征组合": selected_name,
-         "预测功率_W": unknown_power[sid], "功率标签状态": "未用于训练"}
-        for sid in (41, 43, 49)
-    ]
+    selected_speed = min(speed_summary, key=lambda row: (
+        -row["47组正确"], -row["47组平衡准确率_pct"], row["特征数"]))
+    selected_speed_name = selected_speed["特征组合"]
+    final_speed = speed_model().fit(
+        matrix(speed_known, SPEED_SETS[selected_speed_name]), speed)
+    assert final_speed.classes_.tolist() == [550, 700, 850]
+    speed_predictions = final_speed.predict(
+        matrix(speed_unknown, SPEED_SETS[selected_speed_name]))
+    unknown_speed = {int(row["SampleID"]): int(pred)
+                     for row, pred in zip(speed_unknown, speed_predictions)}
+    predictions = []
+    for sid in (41, 43, 49):
+        predictions.append({
+            "SampleID": sid,
+            "功率特征组合": selected_name,
+            "功率模型": "StandardScaler + ElasticNet(alpha=0.1,l1_ratio=0.3)",
+            "预测功率_W": unknown_power[sid],
+            "速度特征组合": selected_speed_name if sid != 49 else "",
+            "速度模型": "StandardScaler + LogisticRegression(C=0.3)" if sid != 49 else "",
+            "速度_mm_s": 850 if sid == 49 else unknown_speed[sid],
+            "速度状态": "已知" if sid == 49 else "预测",
+        })
     RESULTS.mkdir(parents=True, exist_ok=True)
     write_csv("固定ElasticNet特征消融.csv", power_summary)
     write_csv("46组功率逐组留出.csv", power_details)
@@ -217,6 +231,9 @@ def main() -> None:
         print(result["特征组合"], result["47组正确"], "/47",
               "balanced accuracy", round(result["47组平衡准确率_pct"], 2),
               "49 held-out", result["49留一预测速度_mm_s"])
+    print("Selected speed features:", selected_speed_name,
+          "held-out correct", selected_speed["47组正确"], "/47",
+          "balanced accuracy", round(selected_speed["47组平衡准确率_pct"], 2), "%")
     print("Predictions:", predictions)
 
 
