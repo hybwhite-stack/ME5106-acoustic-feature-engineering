@@ -1,9 +1,9 @@
-"""Group-level acoustic features, power prediction, and speed exploration.
+"""Select power features using held-out known groups, then predict unknown P.
 
 Power uses the 46 SampleIDs with known power. Speed exploration uses all 47
 SampleIDs with known speed, including Sample 49. Its speed is held out only
-within that group's cross-validation fold. The 425 W slide reference is used
-solely for a retrospective error calculation after power prediction.
+within that group's cross-validation fold. Unknown power labels never enter
+training, scaling, or feature selection.
 """
 
 from __future__ import annotations
@@ -125,11 +125,9 @@ def main() -> None:
     speed_group_ids = np.array([int(row["SampleID"]) for row in speed_known])
     speed = np.array([int(float(row["ScanSpeed_mm_s"])) for row in speed_known])
     power_summary, power_details = [], []
-    unknown_power: dict[int, float] = {}
 
     for set_name, feature_names in POWER_SETS.items():
         x = matrix(power_known, feature_names)
-        x_unknown = matrix(power_unknown, feature_names)
         loo = np.empty(46)
         for i in range(46):
             keep = np.arange(46) != i
@@ -140,22 +138,26 @@ def main() -> None:
                 "真实功率_W": float(power[i]), "留出预测功率_W": float(loo[i]),
                 "相对误差_pct": float(100 * abs(loo[i] - power[i]) / power[i]),
             })
-        final = power_model().fit(x, power)
-        predicted = np.asarray(final.predict(x_unknown)).reshape(-1)
         relative = np.abs(loo - power) / power
-        pred49 = float(predicted[[int(r["SampleID"]) for r in power_unknown].index(49)])
+        success_count = int(np.sum(relative <= 0.20))
         power_summary.append({
             "特征组合": set_name, "特征数": len(feature_names),
             "具体特征列名": "；".join(feature_names),
             "固定模型": "StandardScaler + ElasticNet(alpha=0.1,l1_ratio=0.3)",
-            "46组误差不超过20pct": int(np.sum(relative <= 0.20)),
+            "46组误差不超过20pct": success_count,
+            "46组成功率_pct": float(100 * success_count / len(power)),
             "46组MAPE_pct": float(100 * np.mean(relative)),
-            "49预测功率_W": pred49,
-            "49相对425W事后误差_pct": float(100 * abs(pred49 - 425) / 425),
         })
-        if set_name == "E_十四项全部联合":
-            unknown_power = {int(row["SampleID"]): float(pred)
-                             for row, pred in zip(power_unknown, predicted)}
+
+    # Select only from held-out predictions on known-power SampleIDs.
+    selected = min(power_summary, key=lambda row: (
+        -row["46组误差不超过20pct"], row["46组MAPE_pct"], row["特征数"]))
+    selected_name = selected["特征组合"]
+    selected_features = POWER_SETS[selected_name]
+    final_power = power_model().fit(matrix(power_known, selected_features), power)
+    final_predictions = final_power.predict(matrix(power_unknown, selected_features))
+    unknown_power = {int(row["SampleID"]): float(pred)
+                     for row, pred in zip(power_unknown, final_predictions)}
 
     speed_summary, speed_details = [], []
     for set_name, feature_names in SPEED_SETS.items():
@@ -194,10 +196,8 @@ def main() -> None:
             "49留一是否正确": int(pred49_held_out == 850),
         })
     predictions = [
-        {"SampleID": sid, "预测功率_W": unknown_power[sid],
-         "已知速度_mm_s": 850 if sid == 49 else "",
-         "功率标签状态": "未用于训练",
-         "备注": "49号425W仅课程材料事后参考" if sid == 49 else "正式真值待公布"}
+        {"SampleID": sid, "所用特征组合": selected_name,
+         "预测功率_W": unknown_power[sid], "功率标签状态": "未用于训练"}
         for sid in (41, 43, 49)
     ]
     RESULTS.mkdir(parents=True, exist_ok=True)
@@ -209,6 +209,9 @@ def main() -> None:
     print("Fixed-model feature comparison:")
     for result in power_summary:
         print(result)
+    print("Selected power features:", selected_name,
+          "held-out success", selected["46组误差不超过20pct"], "/46",
+          "MAPE", round(selected["46组MAPE_pct"], 2), "%")
     print("Fixed speed-model feature comparison:")
     for result in speed_summary:
         print(result["特征组合"], result["47组正确"], "/47",
