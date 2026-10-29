@@ -1,5 +1,5 @@
-SampleID,所用特征组合,预测功率_W,功率标签状态
-41,E_十四项全部联合,321.25323742533703,未用于训练
-43,E_十四项全部联合,396.35098945213144,未用于训练
-49,E_十四项全部联合,383.17790006182634,未用于训练
+SampleID,功率特征组合,功率模型,预测功率_W,速度特征组合,速度模型,速度_mm_s,速度状态
+41,E_十四项全部联合,"StandardScaler + ElasticNet(alpha=0.1,l1_ratio=0.3)",321.25323742533703,V6_十八项再加尾段,StandardScaler + LogisticRegression(C=0.3),700,预测
+43,E_十四项全部联合,"StandardScaler + ElasticNet(alpha=0.1,l1_ratio=0.3)",396.35098945213144,V6_十八项再加尾段,StandardScaler + LogisticRegression(C=0.3),550,预测
+49,E_十四项全部联合,"StandardScaler + ElasticNet(alpha=0.1,l1_ratio=0.3)",383.17790006182634,,,850,已知
 
