@@ -1,8 +1,9 @@
-"""Small-data, group-level acoustic feature comparison and P/V prediction.
+"""Group-level acoustic features, power prediction, and speed exploration.
 
-Only 46 fully labeled SampleIDs fit models. Each SampleID has already been
-summarized from five tracks. Sample 49's 425 W course-slide reference is used
-solely after prediction, for an explicitly retrospective error calculation.
+Power uses the 46 SampleIDs with known power. Speed exploration uses all 47
+SampleIDs with known speed, including Sample 49. Its speed is held out only
+within that group's cross-validation fold. The 425 W slide reference is used
+solely for a retrospective error calculation after power prediction.
 """
 
 from __future__ import annotations
@@ -25,21 +26,19 @@ SIX = ("Min_Mean", "Max_Mean", "Mean_Mean", "Median_Mean",
 BASE_FIVE = ("PooledRMS", "PeakAbs_Mean", "SpectralCentroid_Hz_Mean",
              "Band8to20k_Fraction_Mean", "Band40to80k_Fraction_Mean")
 ONSET = "起始尖峰比_最突出两条均值"
-EARLY_RMS_MEAN = "前0至10ms对中10至25ms_RMS比_五轨平均数"
-EARLY_HIGH_MEAN = "前0至10ms减中10至25ms_高频比例_五轨平均数"
 EARLY_RMS_MEDIAN = "前0至10ms对中10至25ms_RMS比_五轨中位数"
 EARLY_HIGH_MEDIAN = "前0至10ms减中10至25ms_高频比例_五轨中位数"
 TAIL = ("尾25ms至终点对中10至25ms_RMS比_五轨中位数",
         "尾25ms至终点减中10至25ms_高频比例_五轨中位数")
 DURATION = ("Duration_s_Mean", "Duration_s_SD")
 
-OLD_EIGHT_MEAN = BASE_FIVE + (ONSET, EARLY_RMS_MEAN, EARLY_HIGH_MEAN)
+OLD_EIGHT_MEDIAN = BASE_FIVE + (ONSET, EARLY_RMS_MEDIAN, EARLY_HIGH_MEDIAN)
 POWER_SETS = {
     "A_六项时域": SIX,
     "B_五项声强频谱": BASE_FIVE,
-    "C_八项加入尖峰与分段": OLD_EIGHT_MEAN,
+    "C_八项加入尖峰与分段": OLD_EIGHT_MEDIAN,
     "D_十一项时域声强频谱": SIX + BASE_FIVE,
-    "E_十四项全部联合": SIX + OLD_EIGHT_MEAN,
+    "E_十四项全部联合": SIX + OLD_EIGHT_MEDIAN,
 }
 SPEED_FEATURES = SIX + BASE_FIVE + (ONSET, EARLY_RMS_MEDIAN,
                                      EARLY_HIGH_MEDIAN) + DURATION + TAIL
@@ -53,7 +52,6 @@ SPEED_SETS = {
     "V5_十六项加时长": SPEED_FEATURES[:-2],
     "V6_十八项再加尾段": SPEED_FEATURES,
 }
-SPEED_SELECTED = "V6_十八项再加尾段"
 
 
 def load_csv(name: str) -> list[dict[str, str]]:
@@ -81,13 +79,6 @@ def assemble() -> list[dict]:
     six = keyed("六项时域统计_逐组49条.csv", "SampleID")
     onset = keyed("每组起始尖峰汇总.csv", "样本编号")
     windows = keyed("每组两三段特征.csv", "SampleID")
-    per_track = load_csv("每条轨迹两三段特征.csv")
-    assert len(per_track) == 245
-    tracks: dict[int, list[dict[str, str]]] = {sid: [] for sid in range(1, 50)}
-    for row in per_track:
-        tracks[int(row["SampleID"])].append(row)
-    assert all(len(five) == 5 for five in tracks.values())
-
     joined = []
     for sid in range(1, 50):
         row = dict(base[sid])
@@ -96,10 +87,6 @@ def assemble() -> list[dict]:
         row[ONSET] = float(onset[sid][ONSET])
         for feature in (EARLY_RMS_MEDIAN, EARLY_HIGH_MEDIAN) + TAIL:
             row[feature] = float(windows[sid][feature])
-        row[EARLY_RMS_MEAN] = float(np.mean(
-            [float(track["前中RMS比"]) for track in tracks[sid]]))
-        row[EARLY_HIGH_MEAN] = float(np.mean(
-            [float(track["前减中高频比例"]) for track in tracks[sid]]))
         joined.append(row)
     return joined
 
@@ -122,37 +109,41 @@ def matrix(rows: list[dict], features: tuple[str, ...]) -> np.ndarray:
 
 def main() -> None:
     rows = assemble()
-    known = [row for row in rows if row["FullyLabeled"] == "1"]
-    unknown = [row for row in rows if row["FullyLabeled"] != "1"]
-    assert len(known) == 46
-    assert {int(row["SampleID"]) for row in unknown} == {41, 43, 49}
-    assert all(row["LaserPower_W"].lower() == "nan" for row in unknown)
-    assert int(float(next(row for row in unknown if row["SampleID"] == "49")
+    power_known = [row for row in rows if row["PowerKnown"] == "1"]
+    power_unknown = [row for row in rows if row["PowerKnown"] != "1"]
+    speed_known = [row for row in rows if row["SpeedKnown"] == "1"]
+    speed_unknown = [row for row in rows if row["SpeedKnown"] != "1"]
+    assert len(power_known) == 46 and len(speed_known) == 47
+    assert {int(row["SampleID"]) for row in power_unknown} == {41, 43, 49}
+    assert {int(row["SampleID"]) for row in speed_unknown} == {41, 43}
+    assert all(row["LaserPower_W"].lower() == "nan" for row in power_unknown)
+    assert int(float(next(row for row in speed_known if row["SampleID"] == "49")
                      ["ScanSpeed_mm_s"])) == 850
 
-    group_ids = np.array([int(row["SampleID"]) for row in known])
-    power = np.array([float(row["LaserPower_W"]) for row in known])
-    speed = np.array([int(float(row["ScanSpeed_mm_s"])) for row in known])
+    power_group_ids = np.array([int(row["SampleID"]) for row in power_known])
+    power = np.array([float(row["LaserPower_W"]) for row in power_known])
+    speed_group_ids = np.array([int(row["SampleID"]) for row in speed_known])
+    speed = np.array([int(float(row["ScanSpeed_mm_s"])) for row in speed_known])
     power_summary, power_details = [], []
     unknown_power: dict[int, float] = {}
 
     for set_name, feature_names in POWER_SETS.items():
-        x = matrix(known, feature_names)
-        x_unknown = matrix(unknown, feature_names)
+        x = matrix(power_known, feature_names)
+        x_unknown = matrix(power_unknown, feature_names)
         loo = np.empty(46)
         for i in range(46):
             keep = np.arange(46) != i
             model = power_model().fit(x[keep], power[keep])
             loo[i] = float(model.predict(x[i:i + 1])[0])
             power_details.append({
-                "特征组合": set_name, "SampleID": int(group_ids[i]),
+                "特征组合": set_name, "SampleID": int(power_group_ids[i]),
                 "真实功率_W": float(power[i]), "留出预测功率_W": float(loo[i]),
                 "相对误差_pct": float(100 * abs(loo[i] - power[i]) / power[i]),
             })
         final = power_model().fit(x, power)
         predicted = np.asarray(final.predict(x_unknown)).reshape(-1)
         relative = np.abs(loo - power) / power
-        pred49 = float(predicted[[int(r["SampleID"]) for r in unknown].index(49)])
+        pred49 = float(predicted[[int(r["SampleID"]) for r in power_unknown].index(49)])
         power_summary.append({
             "特征组合": set_name, "特征数": len(feature_names),
             "具体特征列名": "；".join(feature_names),
@@ -164,27 +155,26 @@ def main() -> None:
         })
         if set_name == "E_十四项全部联合":
             unknown_power = {int(row["SampleID"]): float(pred)
-                             for row, pred in zip(unknown, predicted)}
+                             for row, pred in zip(power_unknown, predicted)}
 
     speed_summary, speed_details = [], []
-    unknown_speed: dict[int, int] = {}
     for set_name, feature_names in SPEED_SETS.items():
-        speed_x = matrix(known, feature_names)
-        speed_unknown_x = matrix(unknown, feature_names)
-        speed_loo = np.empty(46, dtype=int)
-        for i in range(46):
-            keep = np.arange(46) != i
+        speed_x = matrix(speed_known, feature_names)
+        speed_loo = np.empty(47, dtype=int)
+        for i in range(47):
+            keep = np.arange(47) != i
             model = speed_model().fit(speed_x[keep], speed[keep])
             speed_loo[i] = int(model.predict(speed_x[i:i + 1])[0])
             speed_details.append({
-                "特征组合": set_name, "SampleID": int(group_ids[i]),
+                "特征组合": set_name, "SampleID": int(speed_group_ids[i]),
                 "真实速度_mm_s": int(speed[i]),
                 "留出预测速度_mm_s": int(speed_loo[i]),
                 "正确": int(speed_loo[i] == speed[i]),
             })
+        # The final exploratory speed fit includes Sample 49's known label.
         speed_final = speed_model().fit(speed_x, speed)
-        predicted = np.asarray(speed_final.predict(speed_unknown_x)).reshape(-1)
-        pred49 = int(predicted[[int(r["SampleID"]) for r in unknown].index(49)])
+        assert speed_final.classes_.tolist() == [550, 700, 850]
+        pred49_held_out = int(speed_loo[np.where(speed_group_ids == 49)[0][0]])
         class_correct = {value: int(np.sum((speed == value) & (speed_loo == value)))
                          for value in (550, 700, 850)}
         balanced = np.mean([class_correct[value] / np.sum(speed == value)
@@ -193,21 +183,19 @@ def main() -> None:
             "特征组合": set_name, "特征数": len(feature_names),
             "具体特征列名": "；".join(feature_names),
             "固定模型": "StandardScaler + LogisticRegression(C=0.3)",
-            "46组正确": int(np.sum(speed_loo == speed)),
-            "46组准确率_pct": float(100 * np.mean(speed_loo == speed)),
-            "46组平衡准确率_pct": float(100 * balanced),
+            "已知速度训练组数": 47,
+            "47组正确": int(np.sum(speed_loo == speed)),
+            "47组准确率_pct": float(100 * np.mean(speed_loo == speed)),
+            "47组平衡准确率_pct": float(100 * balanced),
             "550正确_总12": class_correct[550],
             "700正确_总21": class_correct[700],
-            "850正确_总13": class_correct[850],
-            "49预测速度_mm_s": pred49,
-            "49与已见850参考一致": int(pred49 == 850),
+            "850正确_总14": class_correct[850],
+            "49留一预测速度_mm_s": pred49_held_out,
+            "49留一是否正确": int(pred49_held_out == 850),
         })
-        if set_name == SPEED_SELECTED:
-            unknown_speed = {int(row["SampleID"]): int(pred)
-                             for row, pred in zip(unknown, predicted)}
     predictions = [
         {"SampleID": sid, "预测功率_W": unknown_power[sid],
-         "预测速度_mm_s": unknown_speed[sid],
+         "已知速度_mm_s": 850 if sid == 49 else "",
          "功率标签状态": "未用于训练",
          "备注": "49号425W仅课程材料事后参考" if sid == 49 else "正式真值待公布"}
         for sid in (41, 43, 49)
@@ -216,18 +204,19 @@ def main() -> None:
     write_csv("固定ElasticNet特征消融.csv", power_summary)
     write_csv("46组功率逐组留出.csv", power_details)
     write_csv("固定逻辑回归速度特征对照.csv", speed_summary)
-    write_csv("46组速度逐组留出.csv", speed_details)
+    write_csv("47组速度逐组留出.csv", speed_details)
     write_csv("三个待预测组_统一方案.csv", predictions)
     print("Fixed-model feature comparison:")
     for result in power_summary:
         print(result)
     print("Fixed speed-model feature comparison:")
     for result in speed_summary:
-        print(result["特征组合"], result["46组正确"], "/46",
-              "balanced accuracy", round(result["46组平衡准确率_pct"], 2),
-              "49 predicted", result["49预测速度_mm_s"])
+        print(result["特征组合"], result["47组正确"], "/47",
+              "balanced accuracy", round(result["47组平衡准确率_pct"], 2),
+              "49 held-out", result["49留一预测速度_mm_s"])
     print("Predictions:", predictions)
 
 
 if __name__ == "__main__":
     main()
+
