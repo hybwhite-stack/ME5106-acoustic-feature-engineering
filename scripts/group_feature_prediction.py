@@ -35,9 +35,11 @@ DURATION = ("Duration_s_Mean", "Duration_s_SD")
 
 OLD_EIGHT_MEAN = BASE_FIVE + (ONSET, EARLY_RMS_MEAN, EARLY_HIGH_MEAN)
 POWER_SETS = {
-    "六项时域": SIX,
-    "旧八项_分段取平均": OLD_EIGHT_MEAN,
-    "六项联合旧八项_分段取平均": SIX + OLD_EIGHT_MEAN,
+    "A_六项时域": SIX,
+    "B_五项声强频谱": BASE_FIVE,
+    "C_八项加入尖峰与分段": OLD_EIGHT_MEAN,
+    "D_十一项时域声强频谱": SIX + BASE_FIVE,
+    "E_十四项全部联合": SIX + OLD_EIGHT_MEAN,
 }
 SPEED_FEATURES = SIX + BASE_FIVE + (ONSET, EARLY_RMS_MEDIAN,
                                      EARLY_HIGH_MEDIAN) + DURATION + TAIL
@@ -142,13 +144,14 @@ def main() -> None:
         pred49 = float(predicted[[int(r["SampleID"]) for r in unknown].index(49)])
         power_summary.append({
             "特征组合": set_name, "特征数": len(feature_names),
+            "具体特征列名": "；".join(feature_names),
             "固定模型": "StandardScaler + ElasticNet(alpha=0.1,l1_ratio=0.3)",
             "46组误差不超过20pct": int(np.sum(relative <= 0.20)),
             "46组MAPE_pct": float(100 * np.mean(relative)),
             "49预测功率_W": pred49,
             "49相对425W事后误差_pct": float(100 * abs(pred49 - 425) / 425),
         })
-        if set_name == "六项联合旧八项_分段取平均":
+        if set_name == "E_十四项全部联合":
             unknown_power = {int(row["SampleID"]): float(pred)
                              for row, pred in zip(unknown, predicted)}
 
@@ -189,4 +192,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
