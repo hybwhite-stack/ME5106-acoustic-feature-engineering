@@ -1,6 +1,7 @@
-﻿特征组合,特征数,具体特征列名,固定模型,46组误差不超过20pct,46组MAPE_pct,49预测功率_W,49相对425W事后误差_pct
+特征组合,特征数,具体特征列名,固定模型,46组误差不超过20pct,46组MAPE_pct,49预测功率_W,49相对425W事后误差_pct
 A_六项时域,6,Min_Mean；Max_Mean；Mean_Mean；Median_Mean；PeakToPeak_Mean；RMS_Mean,"StandardScaler + ElasticNet(alpha=0.1,l1_ratio=0.3)",36,10.536381722404665,328.60012747297,22.682322947536477
 B_五项声强频谱,5,PooledRMS；PeakAbs_Mean；SpectralCentroid_Hz_Mean；Band8to20k_Fraction_Mean；Band40to80k_Fraction_Mean,"StandardScaler + ElasticNet(alpha=0.1,l1_ratio=0.3)",37,10.601389763848996,335.58226194301875,21.039467778113234
-C_八项加入尖峰与分段,8,PooledRMS；PeakAbs_Mean；SpectralCentroid_Hz_Mean；Band8to20k_Fraction_Mean；Band40to80k_Fraction_Mean；起始尖峰比_最突出两条均值；前0至10ms对中10至25ms_RMS比_五轨平均数；前0至10ms减中10至25ms_高频比例_五轨平均数,"StandardScaler + ElasticNet(alpha=0.1,l1_ratio=0.3)",40,9.225735667015437,385.8299787352355,9.216475591709294
+C_八项加入尖峰与分段,8,PooledRMS；PeakAbs_Mean；SpectralCentroid_Hz_Mean；Band8to20k_Fraction_Mean；Band40to80k_Fraction_Mean；起始尖峰比_最突出两条均值；前0至10ms对中10至25ms_RMS比_五轨中位数；前0至10ms减中10至25ms_高频比例_五轨中位数,"StandardScaler + ElasticNet(alpha=0.1,l1_ratio=0.3)",41,9.3461444203336,380.36812992547846,10.501616488122716
 D_十一项时域声强频谱,11,Min_Mean；Max_Mean；Mean_Mean；Median_Mean；PeakToPeak_Mean；RMS_Mean；PooledRMS；PeakAbs_Mean；SpectralCentroid_Hz_Mean；Band8to20k_Fraction_Mean；Band40to80k_Fraction_Mean,"StandardScaler + ElasticNet(alpha=0.1,l1_ratio=0.3)",35,10.84261640713976,334.5378914128131,21.28520202051456
-E_十四项全部联合,14,Min_Mean；Max_Mean；Mean_Mean；Median_Mean；PeakToPeak_Mean；RMS_Mean；PooledRMS；PeakAbs_Mean；SpectralCentroid_Hz_Mean；Band8to20k_Fraction_Mean；Band40to80k_Fraction_Mean；起始尖峰比_最突出两条均值；前0至10ms对中10至25ms_RMS比_五轨平均数；前0至10ms减中10至25ms_高频比例_五轨平均数,"StandardScaler + ElasticNet(alpha=0.1,l1_ratio=0.3)",42,8.295344923330013,387.381474372262,8.85141779476188
+E_十四项全部联合,14,Min_Mean；Max_Mean；Mean_Mean；Median_Mean；PeakToPeak_Mean；RMS_Mean；PooledRMS；PeakAbs_Mean；SpectralCentroid_Hz_Mean；Band8to20k_Fraction_Mean；Band40to80k_Fraction_Mean；起始尖峰比_最突出两条均值；前0至10ms对中10至25ms_RMS比_五轨中位数；前0至10ms减中10至25ms_高频比例_五轨中位数,"StandardScaler + ElasticNet(alpha=0.1,l1_ratio=0.3)",43,8.04619081855929,383.17790006182634,9.840494103099687
+
